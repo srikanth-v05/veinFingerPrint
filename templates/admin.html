@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Admin | VeinTrace{% endblock %}
+{% block page_id %}admin{% endblock %}
+
+{% block content %}
+<main class="layout-grid admin-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">Enrollment</p>
+        <h1>Add a new user</h1>
+      </div>
+    </div>
+    <form id="enroll-form" class="stack-form">
+      <label>
+        <span>User ID</span>
+        <input type="text" name="user_id" placeholder="employee-001">
+      </label>
+      <label>
+        <span>Full Name</span>
+        <input type="text" name="full_name" placeholder="Asha Kumar" required>
+      </label>
+      <label>
+        <span>Sample Count</span>
+        <input type="number" name="sample_count" min="1" max="6" value="{{ default_samples }}">
+      </label>
+      <button type="submit" class="primary-button">Capture and Enroll</button>
+    </form>
+    <div id="admin-status" class="flash info">
+      Keep the finger still during enrollment. Multiple captures will be taken automatically.
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">System</p>
+        <h2>Current status</h2>
+      </div>
+    </div>
+    <div class="info-grid">
+      <div class="info-card">
+        <span>Camera Backend</span>
+        <strong>{{ status.camera_backend }}</strong>
+      </div>
+      <div class="info-card">
+        <span>Enrolled Users</span>
+        <strong>{{ status.users_enrolled }}</strong>
+      </div>
+      <div class="info-card">
+        <span>Threshold</span>
+        <strong>{{ status.match_threshold }}</strong>
+      </div>
+      <div class="info-card">
+        <span>Default Samples</span>
+        <strong>{{ status.sample_count }}</strong>
+      </div>
+    </div>
+    <div class="preview-grid compact-preview">
+      <figure class="preview-card">
+        <figcaption>Latest raw frame</figcaption>
+        <img data-preview="last_capture" src="{{ url_for('capture_file', filename='last_capture.png') }}" alt="Latest camera capture">
+      </figure>
+      <figure class="preview-card">
+        <figcaption>Latest processed template</figcaption>
+        <img data-preview="last_template" src="{{ url_for('capture_file', filename='last_template.png') }}" alt="Latest processed template">
+      </figure>
+    </div>
+  </section>
+
+  <section class="panel wide-panel">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">Enrolled Users</p>
+        <h2>Remove users if needed</h2>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>User ID</th>
+            <th>Name</th>
+            <th>Samples</th>
+            <th>Created</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr>
+            <td>{{ user.user_id }}</td>
+            <td>{{ user.full_name }}</td>
+            <td>{{ user.samples|length }}</td>
+            <td>{{ user.created_at }}</td>
+            <td>
+              <button class="danger-button delete-user-button" data-user-id="{{ user.user_id }}">
+                Remove
+              </button>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="empty-cell">No enrolled users yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel wide-panel">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">Recent Activity</p>
+        <h2>Attendance records</h2>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>User ID</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in recent_attendance %}
+          <tr>
+            <td>{{ row.timestamp }}</td>
+            <td>{{ row.user_id }}</td>
+            <td>{{ row.name }}</td>
+            <td>{{ row.status }}</td>
+            <td>{{ row.score }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="empty-cell">No attendance records yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+{% endblock %}

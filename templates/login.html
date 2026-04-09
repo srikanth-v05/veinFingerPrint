@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Login | VeinTrace{% endblock %}
+{% block page_id %}login{% endblock %}
+
+{% block content %}
+<main class="single-panel-layout">
+  <section class="panel auth-panel">
+    <p class="eyebrow">Admin Access</p>
+    <h1>Manage enrollments</h1>
+    <p class="lead">Use the admin dashboard to add or remove finger-vein users.</p>
+
+    {% if error %}
+    <div class="flash error">{{ error }}</div>
+    {% endif %}
+
+    <form action="{{ url_for('admin_login_post') }}" method="post" class="stack-form">
+      <label>
+        <span>Username</span>
+        <input type="text" name="username" value="admin" required>
+      </label>
+      <label>
+        <span>Password</span>
+        <input type="password" name="password" value="admin123" required>
+      </label>
+      <button type="submit" class="primary-button">Login</button>
+    </form>
+
+    <div class="credentials-note">
+      Default credentials: <code>admin</code> / <code>admin123</code>
+    </div>
+  </section>
+</main>
+{% endblock %}

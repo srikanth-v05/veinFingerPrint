@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-labelledby="title desc">
+  <title id="title">No capture yet</title>
+  <desc id="desc">Placeholder image shown before the first vein capture.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#10202d" />
+      <stop offset="100%" stop-color="#08131c" />
+    </linearGradient>
+    <linearGradient id="finger" x1="0%" x2="0%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#2f4f60" />
+      <stop offset="100%" stop-color="#1b3342" />
+    </linearGradient>
+  </defs>
+  <rect width="640" height="400" rx="28" fill="url(#bg)" />
+  <g opacity="0.12" stroke="#7ff2cf" stroke-width="1">
+    <path d="M0 80H640" />
+    <path d="M0 160H640" />
+    <path d="M0 240H640" />
+    <path d="M0 320H640" />
+    <path d="M80 0V400" />
+    <path d="M160 0V400" />
+    <path d="M240 0V400" />
+    <path d="M320 0V400" />
+    <path d="M400 0V400" />
+    <path d="M480 0V400" />
+    <path d="M560 0V400" />
+  </g>
+  <g transform="translate(150 74)">
+    <rect x="0" y="0" width="340" height="250" rx="70" fill="url(#finger)" stroke="#7ff2cf" stroke-opacity="0.25" />
+    <path d="M82 58c46 14 64 48 84 87 24 48 63 70 91 84" fill="none" stroke="#7ff2cf" stroke-width="5" stroke-linecap="round" opacity="0.75" />
+    <path d="M114 42c28 20 39 45 50 70 17 40 40 69 72 101" fill="none" stroke="#ffd39a" stroke-width="4" stroke-linecap="round" opacity="0.55" />
+    <path d="M142 66c24 20 26 42 32 64 8 29 24 54 50 86" fill="none" stroke="#7ff2cf" stroke-width="3" stroke-linecap="round" opacity="0.6" />
+  </g>
+  <text x="320" y="355" text-anchor="middle" fill="#ecf5f8" font-family="Space Grotesk, IBM Plex Sans, sans-serif" font-size="28">
+    Waiting for first capture
+  </text>
+</svg>

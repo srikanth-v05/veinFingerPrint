@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Vein Attendance{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body data-page="{% block page_id %}base{% endblock %}">
+  <div class="page-shell">
+    <header class="topbar">
+      <a class="brand" href="{{ url_for('attendance_home') }}">
+        <span class="brand-mark"></span>
+        <div>
+          <strong>VeinTrace</strong>
+          <small>Finger-vein attendance</small>
+        </div>
+      </a>
+      <nav class="topbar-nav">
+        <a href="{{ url_for('attendance_home') }}" class="nav-link">Attendance</a>
+        {% if session.get('admin_authenticated') %}
+          <a href="{{ url_for('admin_dashboard') }}" class="nav-link">Admin</a>
+          <a href="{{ url_for('admin_logout') }}" class="nav-link">Logout</a>
+        {% else %}
+          <a href="{{ url_for('admin_login') }}" class="nav-link">Admin Login</a>
+        {% endif %}
+      </nav>
+    </header>
+    {% block content %}{% endblock %}
+  </div>
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</body>
+</html>

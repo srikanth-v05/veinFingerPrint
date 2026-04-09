@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance | VeinTrace{% endblock %}
+{% block page_id %}attendance{% endblock %}
+
+{% block content %}
+<main class="layout-grid">
+  <section class="hero-card">
+    <p class="eyebrow">Public Attendance Panel</p>
+    <h1>Mark attendance with a single finger-vein scan.</h1>
+    <p class="lead">
+      Place the finger inside the slot, keep it still for a moment, and press the button.
+      The system captures the vein image from the Raspberry Pi camera and matches it with enrolled users.
+    </p>
+    <div class="hero-actions">
+      <button id="mark-attendance-button" class="primary-button">Mark Attendance</button>
+      <div class="status-pills">
+        <span class="pill">Camera: {{ status.camera_backend }}</span>
+        <span class="pill">Users: {{ status.users_enrolled }}</span>
+        <span class="pill">Threshold: {{ status.match_threshold }}</span>
+      </div>
+    </div>
+    <div id="attendance-status" class="flash info">
+      Ready to capture. Use NIR light and keep the finger position fixed.
+    </div>
+    <div id="attendance-result" class="result-card">
+      <p class="result-label">Last response</p>
+      <h2>Waiting for scan</h2>
+      <p>The latest match result will appear here.</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">Capture Preview</p>
+        <h2>Latest sample</h2>
+      </div>
+    </div>
+    <div class="preview-grid">
+      <figure class="preview-card">
+        <figcaption>Raw camera frame</figcaption>
+        <img data-preview="last_capture" src="{{ url_for('capture_file', filename='last_capture.png') }}" alt="Latest camera capture">
+      </figure>
+      <figure class="preview-card">
+        <figcaption>Processed vein template</figcaption>
+        <img data-preview="last_template" src="{{ url_for('capture_file', filename='last_template.png') }}" alt="Latest processed template">
+      </figure>
+    </div>
+  </section>
+
+  <section class="panel wide-panel">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">Recent Records</p>
+        <h2>Attendance log</h2>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="attendance-log-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>User ID</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in recent_attendance %}
+          <tr>
+            <td>{{ row.timestamp }}</td>
+            <td>{{ row.user_id }}</td>
+            <td>{{ row.name }}</td>
+            <td>{{ row.status }}</td>
+            <td>{{ row.score }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="empty-cell">No attendance records yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+{% endblock %}
