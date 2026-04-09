@@ -83,3 +83,10 @@ The default match threshold is controlled with:
 ```bash
 export VEIN_MATCH_THRESHOLD=0.58
 ```
+
+The Raspberry Pi camera capture uses these defaults:
+
+```bash
+export VEIN_RPICAM_SHUTTER=3500
+export VEIN_RPICAM_GAIN=1
+```

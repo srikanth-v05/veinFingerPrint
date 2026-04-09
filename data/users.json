@@ -1,3 +1,48 @@
 {
-  "users": []
+  "users": [
+    {
+      "user_id": "ee",
+      "full_name": "Srikanth",
+      "created_at": "2026-04-09T08:46:22.314354",
+      "samples": [
+        {
+          "captured_at": "2026-04-09T08:46:22.314354",
+          "raw_path": "users/ee/raw_001.png",
+          "template_path": "users/ee/template_001.png"
+        },
+        {
+          "captured_at": "2026-04-09T08:46:22.314354",
+          "raw_path": "users/ee/raw_002.png",
+          "template_path": "users/ee/template_002.png"
+        },
+        {
+          "captured_at": "2026-04-09T08:46:22.314354",
+          "raw_path": "users/ee/raw_003.png",
+          "template_path": "users/ee/template_003.png"
+        }
+      ]
+    },
+    {
+      "user_id": "emp-1",
+      "full_name": "Srikanthhh",
+      "created_at": "2026-04-09T08:47:07.940075",
+      "samples": [
+        {
+          "captured_at": "2026-04-09T08:47:07.940075",
+          "raw_path": "users/emp-1/raw_001.png",
+          "template_path": "users/emp-1/template_001.png"
+        },
+        {
+          "captured_at": "2026-04-09T08:47:07.940075",
+          "raw_path": "users/emp-1/raw_002.png",
+          "template_path": "users/emp-1/template_002.png"
+        },
+        {
+          "captured_at": "2026-04-09T08:47:07.940075",
+          "raw_path": "users/emp-1/raw_003.png",
+          "template_path": "users/emp-1/template_003.png"
+        }
+      ]
+    }
+  ]
 }

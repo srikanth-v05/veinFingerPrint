@@ -24,6 +24,8 @@ class Config:
     CAMERA_HEIGHT = int(os.getenv("VEIN_CAMERA_HEIGHT", "720"))
     CAMERA_WARMUP_SECONDS = float(os.getenv("VEIN_CAMERA_WARMUP_SECONDS", "2.0"))
     CAPTURE_DELAY_SECONDS = float(os.getenv("VEIN_CAPTURE_DELAY_SECONDS", "0.8"))
+    RPICAM_SHUTTER = int(os.getenv("VEIN_RPICAM_SHUTTER", "3500"))
+    RPICAM_GAIN = float(os.getenv("VEIN_RPICAM_GAIN", "1"))
 
     ENROLLMENT_SAMPLES = int(os.getenv("VEIN_ENROLLMENT_SAMPLES", "3"))
     MATCH_THRESHOLD = float(os.getenv("VEIN_MATCH_THRESHOLD", "0.58"))
