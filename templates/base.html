@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Vein Attendance{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <meta name="csrf-token" content="{{ csrf_token }}">
 </head>
 <body data-page="{% block page_id %}base{% endblock %}">
   <div class="page-shell">
@@ -20,7 +21,10 @@
         <a href="{{ url_for('attendance_home') }}" class="nav-link">Attendance</a>
         {% if session.get('admin_authenticated') %}
           <a href="{{ url_for('admin_dashboard') }}" class="nav-link">Admin</a>
-          <a href="{{ url_for('admin_logout') }}" class="nav-link">Logout</a>
+          <form action="{{ url_for('admin_logout') }}" method="post" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="nav-link nav-link-button">Logout</button>
+          </form>
         {% else %}
           <a href="{{ url_for('admin_login') }}" class="nav-link">Admin Login</a>
         {% endif %}

@@ -148,6 +148,7 @@ class CameraService:
                 check=False,
                 capture_output=True,
                 text=True,
+                timeout=30,
             )
             if completed.returncode != 0:
                 message = completed.stderr.strip() or "rpicam-still failed."

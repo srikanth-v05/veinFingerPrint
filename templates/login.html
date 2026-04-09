@@ -15,20 +15,17 @@
     {% endif %}
 
     <form action="{{ url_for('admin_login_post') }}" method="post" class="stack-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label>
         <span>Username</span>
-        <input type="text" name="username" value="admin" required>
+        <input type="text" name="username" autocomplete="username" required>
       </label>
       <label>
         <span>Password</span>
-        <input type="password" name="password" value="admin123" required>
+        <input type="password" name="password" autocomplete="current-password" required>
       </label>
       <button type="submit" class="primary-button">Login</button>
     </form>
-
-    <div class="credentials-note">
-      Default credentials: <code>admin</code> / <code>admin123</code>
-    </div>
   </section>
 </main>
 {% endblock %}

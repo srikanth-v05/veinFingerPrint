@@ -1,3 +1,4 @@
+import secrets
 from pathlib import Path
 import os
 
@@ -9,7 +10,8 @@ CAPTURES_DIR = DATA_DIR / "captures"
 
 
 class Config:
-    SECRET_KEY = os.getenv("VEIN_SECRET_KEY", "change-this-secret-before-production")
+    _env_secret = os.getenv("VEIN_SECRET_KEY")
+    SECRET_KEY = _env_secret if _env_secret else secrets.token_hex(32)
     ADMIN_USERNAME = os.getenv("VEIN_ADMIN_USER", "admin")
     ADMIN_PASSWORD = os.getenv("VEIN_ADMIN_PASSWORD", "admin123")
 
@@ -28,5 +30,6 @@ class Config:
     RPICAM_GAIN = float(os.getenv("VEIN_RPICAM_GAIN", "1"))
 
     ENROLLMENT_SAMPLES = int(os.getenv("VEIN_ENROLLMENT_SAMPLES", "3"))
+    # MATCH_THRESHOLD applies to cosine similarity space [0, 1] when HOG features are used.
     MATCH_THRESHOLD = float(os.getenv("VEIN_MATCH_THRESHOLD", "0.58"))
     MATCH_TOP_K = int(os.getenv("VEIN_MATCH_TOP_K", "2"))

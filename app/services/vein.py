@@ -20,6 +20,11 @@ class VeinRecognitionService:
 
     def __init__(self):
         self._orb = cv2.ORB_create(nfeatures=300) if cv2 is not None else None
+        try:
+            import skimage.feature  # noqa: F401
+            self._has_skimage = True
+        except ImportError:
+            self._has_skimage = False
 
     def normalize_user_id(self, value):
         cleaned = re.sub(r"[^a-zA-Z0-9_-]+", "-", value.strip().lower())
@@ -56,7 +61,6 @@ class VeinRecognitionService:
                     ImageFilter.GaussianBlur(radius=1.4)
                 )
             )
-            normalized = self._normalize(denoised)
 
         threshold_value = self._otsu_threshold(denoised)
         binary = np.where(denoised >= threshold_value, 255, 0).astype(np.uint8)
@@ -67,6 +71,31 @@ class VeinRecognitionService:
                 np.uint8
             )
         return enhanced
+
+    def extract_features(self, template):
+        if self._has_skimage:
+            from skimage.feature import hog
+            features = hog(
+                template,
+                orientations=9,
+                pixels_per_cell=(8, 8),
+                cells_per_block=(2, 2),
+                block_norm='L2-Hys',
+                visualize=False,
+                feature_vector=True,
+            )
+            norm = np.linalg.norm(features)
+            return features / norm if norm > 0 else features
+        else:
+            flat = template.astype(np.float32).ravel()
+            norm = np.linalg.norm(flat)
+            return flat / norm if norm > 0 else flat
+
+    def compare_features(self, feat1, feat2):
+        if feat1.shape != feat2.shape:
+            return 0.0
+        score = float(np.dot(feat1, feat2))
+        return float(np.clip(score, 0.0, 1.0))
 
     def compare_templates(self, query_template, reference_template):
         query = query_template.astype(np.float32)

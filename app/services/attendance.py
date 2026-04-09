@@ -41,12 +41,13 @@ class AttendanceService:
                 try:
                     frame = self.camera.capture_frame()
                     template = self.vein.extract_template(frame)
+                    features = self.vein.extract_features(template)
                 except Exception as exc:
                     last_error = str(exc)
                     time.sleep(self.config["CAPTURE_DELAY_SECONDS"])
                     continue
 
-                samples.append({"raw": frame, "template": template})
+                samples.append({"raw": frame, "template": template, "features": features})
                 last_frame = frame
                 last_template = template
                 if len(samples) < sample_count:
@@ -86,6 +87,7 @@ class AttendanceService:
 
             frame = self.camera.capture_frame()
             query_template = self.vein.extract_template(frame)
+            query_features = self.vein.extract_features(query_template)
             self.storage.save_last_capture(frame, query_template)
 
             best_user = None
@@ -94,11 +96,16 @@ class AttendanceService:
             for user in users:
                 user_scores = []
                 for sample in user.get("samples", []):
+                    if "features_path" in sample:
+                        ref_features = self.storage.load_features(sample["features_path"])
+                        if ref_features is not None:
+                            score = self.vein.compare_features(query_features, ref_features)
+                            user_scores.append(score)
+                            continue
                     template = self.storage.load_template(sample["template_path"])
-                    if template is None:
-                        continue
-                    score = self.vein.compare_templates(query_template, template)
-                    user_scores.append(score)
+                    if template is not None:
+                        score = self.vein.compare_templates(query_template, template)
+                        user_scores.append(score)
 
                 if not user_scores:
                     continue

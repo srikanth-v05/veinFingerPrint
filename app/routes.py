@@ -1,3 +1,5 @@
+import hmac
+import secrets
 from functools import wraps
 from pathlib import Path
 
@@ -30,6 +32,21 @@ def register_routes(app):
 
         return wrapped
 
+    def _get_csrf_token():
+        if "csrf_token" not in session:
+            session["csrf_token"] = secrets.token_hex(32)
+        return session["csrf_token"]
+
+    def _validate_csrf():
+        token = request.headers.get("X-CSRF-Token") or (request.form or {}).get("csrf_token", "")
+        if not token or token != session.get("csrf_token"):
+            return False
+        return True
+
+    @app.context_processor
+    def inject_csrf():
+        return {"csrf_token": _get_csrf_token()}
+
     @app.get("/")
     def attendance_home():
         storage = storage_service()
@@ -41,6 +58,8 @@ def register_routes(app):
 
     @app.post("/api/attendance/mark")
     def mark_attendance():
+        if not _validate_csrf():
+            return jsonify({"ok": False, "message": "Invalid request."}), 403
         result = attendance_service().mark_attendance()
         return jsonify(result), 200 if result["ok"] else 400
 
@@ -57,12 +76,15 @@ def register_routes(app):
 
     @app.post("/admin/login")
     def admin_login_post():
+        if not _validate_csrf():
+            return render_template("login.html", error="Invalid request."), 403
+
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
 
         if (
-            username == current_app.config["ADMIN_USERNAME"]
-            and password == current_app.config["ADMIN_PASSWORD"]
+            hmac.compare_digest(username, current_app.config["ADMIN_USERNAME"])
+            and hmac.compare_digest(password, current_app.config["ADMIN_PASSWORD"])
         ):
             session["admin_authenticated"] = True
             return redirect(url_for("admin_dashboard"))
@@ -72,8 +94,10 @@ def register_routes(app):
             error="Invalid username or password.",
         ), 401
 
-    @app.get("/admin/logout")
+    @app.post("/admin/logout")
     def admin_logout():
+        if not _validate_csrf():
+            return redirect(url_for("attendance_home"))
         session.clear()
         return redirect(url_for("attendance_home"))
 
@@ -92,12 +116,20 @@ def register_routes(app):
     @app.post("/api/admin/enroll")
     @admin_required
     def enroll_user():
+        if not _validate_csrf():
+            return jsonify({"ok": False, "message": "Invalid request."}), 403
+
         payload = request.get_json(silent=True) or request.form
         user_id = (payload.get("user_id") or "").strip()
         full_name = (payload.get("full_name") or "").strip()
         sample_count = payload.get(
             "sample_count", current_app.config["ENROLLMENT_SAMPLES"]
         )
+
+        if len(user_id) > 64:
+            return jsonify({"ok": False, "message": "User ID too long (max 64 chars)."}), 400
+        if len(full_name) > 128:
+            return jsonify({"ok": False, "message": "Full name too long (max 128 chars)."}), 400
 
         try:
             sample_count = int(sample_count)
@@ -114,6 +146,9 @@ def register_routes(app):
     @app.post("/api/admin/users/<user_id>/delete")
     @admin_required
     def delete_user(user_id):
+        if not _validate_csrf():
+            return jsonify({"ok": False, "message": "Invalid request."}), 403
+
         result = attendance_service().delete_user(user_id)
         return jsonify(result), 200 if result["ok"] else 404
 

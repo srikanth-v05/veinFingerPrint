@@ -16,8 +16,17 @@ function setButtonBusy(button, busy, busyLabel, idleLabel) {
   button.textContent = busy ? busyLabel : idleLabel;
 }
 
+function getCsrfToken() {
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  return meta ? meta.content : "";
+}
+
 async function requestJson(url, options = {}) {
-  const response = await fetch(url, options);
+  const headers = { ...options.headers };
+  if (options.method && options.method.toUpperCase() !== "GET") {
+    headers["X-CSRF-Token"] = getCsrfToken();
+  }
+  const response = await fetch(url, { ...options, headers });
   let payload = {};
 
   try {
@@ -40,30 +49,36 @@ function refreshPreviewImages() {
   });
 }
 
+function createTextCell(text) {
+  const td = document.createElement("td");
+  td.textContent = text;
+  return td;
+}
+
 function renderAttendanceLog(records) {
-  const table = document.querySelector("#attendance-log-table tbody");
-  if (!table) {
-    return;
-  }
+  const tbody = document.querySelector("#attendance-log-table tbody");
+  if (!tbody) return;
+
+  tbody.innerHTML = "";
 
   if (!records.length) {
-    table.innerHTML = '<tr><td colspan="5" class="empty-cell">No attendance records yet.</td></tr>';
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 5;
+    td.className = "empty-cell";
+    td.textContent = "No attendance records yet.";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
     return;
   }
 
-  table.innerHTML = records
-    .map(
-      (row) => `
-        <tr>
-          <td>${row.timestamp}</td>
-          <td>${row.user_id}</td>
-          <td>${row.name}</td>
-          <td>${row.status}</td>
-          <td>${row.score}</td>
-        </tr>
-      `
-    )
-    .join("");
+  records.forEach((row) => {
+    const tr = document.createElement("tr");
+    [row.timestamp, row.user_id, row.name, row.status, row.score].forEach((val) => {
+      tr.appendChild(createTextCell(val ?? ""));
+    });
+    tbody.appendChild(tr);
+  });
 }
 
 async function refreshAttendanceLog() {
@@ -95,20 +110,34 @@ function initAttendancePage() {
     try {
       const payload = await requestJson("/api/attendance/mark", { method: "POST" });
       setFlash(flash, payload.message, "success");
-      resultCard.innerHTML = `
-        <p class="result-label">Last response</p>
-        <h2>${payload.user?.full_name || "Attendance captured"}</h2>
-        <p>Score: ${payload.score ?? "-"}${payload.record?.timestamp ? ` | Time: ${payload.record.timestamp}` : ""}</p>
-      `;
+
+      resultCard.innerHTML = "";
+      const label = document.createElement("p");
+      label.className = "result-label";
+      label.textContent = "Last response";
+      const heading = document.createElement("h2");
+      heading.textContent = payload.user?.full_name || "Attendance captured";
+      const detail = document.createElement("p");
+      const scoreText = payload.score != null ? `Score: ${payload.score}` : "";
+      const timeText = payload.record?.timestamp ? ` | Time: ${payload.record.timestamp}` : "";
+      detail.textContent = scoreText + timeText;
+      resultCard.append(label, heading, detail);
+
       refreshPreviewImages();
       refreshAttendanceLog();
     } catch (error) {
       setFlash(flash, error.message, "error");
-      resultCard.innerHTML = `
-        <p class="result-label">Last response</p>
-        <h2>Scan failed</h2>
-        <p>${error.message}</p>
-      `;
+
+      resultCard.innerHTML = "";
+      const label = document.createElement("p");
+      label.className = "result-label";
+      label.textContent = "Last response";
+      const heading = document.createElement("h2");
+      heading.textContent = "Scan failed";
+      const detail = document.createElement("p");
+      detail.textContent = error.message;
+      resultCard.append(label, heading, detail);
+
       refreshPreviewImages();
     } finally {
       setButtonBusy(button, false, "Capturing vein...", "Mark Attendance");

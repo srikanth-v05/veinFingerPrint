@@ -3,7 +3,7 @@ import json
 import shutil
 from datetime import datetime
 from pathlib import Path
-from threading import Lock
+from threading import RLock
 
 import numpy as np
 
@@ -25,7 +25,7 @@ class StorageService:
         self.attendance_file = Path(config["ATTENDANCE_FILE"])
         self.users_dir = Path(config["USERS_DIR"])
         self.captures_dir = Path(config["CAPTURES_DIR"])
-        self._lock = Lock()
+        self._lock = RLock()
         self._ensure_layout()
 
     def _ensure_layout(self):
@@ -63,45 +63,48 @@ class StorageService:
         for index, sample in enumerate(samples, start=1):
             raw_name = f"raw_{index:03d}.png"
             template_name = f"template_{index:03d}.png"
+            features_name = f"features_{index:03d}.npy"
+
             raw_path = user_dir / raw_name
             template_path = user_dir / template_name
+            features_path = user_dir / features_name
 
             self._save_image(raw_path, sample["raw"])
             self._save_image(template_path, sample["template"])
 
-            sample_entries.append(
-                {
-                    "captured_at": timestamp,
-                    "raw_path": str(raw_path.relative_to(self.users_file.parent)),
-                    "template_path": str(template_path.relative_to(self.users_file.parent)),
-                }
-            )
+            entry = {
+                "captured_at": timestamp,
+                "raw_path": str(raw_path.relative_to(self.users_file.parent)),
+                "template_path": str(template_path.relative_to(self.users_file.parent)),
+            }
 
-        payload = self._read_users_payload()
-        payload["users"] = [
-            user for user in payload["users"] if user["user_id"] != user_id
-        ]
-        payload["users"].append(
-            {
+            if "features" in sample and sample["features"] is not None:
+                self._save_features(features_path, sample["features"])
+                entry["features_path"] = str(features_path.relative_to(self.users_file.parent))
+
+            sample_entries.append(entry)
+
+        with self._lock:
+            payload = self._read_payload_nolock()
+            payload["users"] = [u for u in payload["users"] if u["user_id"] != user_id]
+            payload["users"].append({
                 "user_id": user_id,
                 "full_name": full_name,
                 "created_at": timestamp,
                 "samples": sample_entries,
-            }
-        )
-        self._write_users_payload(payload)
+            })
+            self._write_payload_nolock(payload)
+
         return self.get_user(user_id)
 
     def delete_user(self, user_id):
-        payload = self._read_users_payload()
-        original_count = len(payload["users"])
-        payload["users"] = [
-            user for user in payload["users"] if user["user_id"] != user_id
-        ]
-        if len(payload["users"]) == original_count:
-            return False
-
-        self._write_users_payload(payload)
+        with self._lock:
+            payload = self._read_payload_nolock()
+            original_count = len(payload["users"])
+            payload["users"] = [u for u in payload["users"] if u["user_id"] != user_id]
+            if len(payload["users"]) == original_count:
+                return False
+            self._write_payload_nolock(payload)
         user_dir = self.users_dir / user_id
         if user_dir.exists():
             shutil.rmtree(user_dir)
@@ -118,15 +121,21 @@ class StorageService:
         return rows[:limit]
 
     def get_today_record(self, user_id):
-        today = datetime.now().date().isoformat()
-        for row in self.list_recent_attendance(limit=1000):
-            if row["user_id"] == user_id and row["timestamp"].startswith(today):
+        today = datetime.utcnow().date().isoformat()
+        if not self.attendance_file.exists():
+            return None
+        with self.attendance_file.open(newline="") as handle:
+            rows = list(csv.DictReader(handle))
+        for row in reversed(rows):
+            if not row["timestamp"].startswith(today):
+                break
+            if row["user_id"] == user_id:
                 return row
         return None
 
     def record_attendance(self, user_id, full_name, score, status="marked"):
         row = {
-            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "timestamp": datetime.utcnow().isoformat(timespec="seconds"),
             "user_id": user_id,
             "name": full_name,
             "status": status,
@@ -145,19 +154,30 @@ class StorageService:
         image_path = self.users_file.parent / relative_path
         return self._load_image(image_path, grayscale=True)
 
+    def load_features(self, relative_path):
+        path = self.users_file.parent / relative_path
+        if not path.exists():
+            return None
+        return np.load(str(path))
+
     def save_last_capture(self, raw_image=None, template_image=None):
         if raw_image is not None:
             self._save_image(self.captures_dir / "last_capture.png", raw_image)
         if template_image is not None:
             self._save_image(self.captures_dir / "last_template.png", template_image)
 
+    def _read_payload_nolock(self):
+        return json.loads(self.users_file.read_text())
+
+    def _write_payload_nolock(self, payload):
+        self.users_file.write_text(json.dumps(payload, indent=2))
+
     def _read_users_payload(self):
         with self._lock:
-            return json.loads(self.users_file.read_text())
+            return self._read_payload_nolock()
 
-    def _write_users_payload(self, payload):
-        with self._lock:
-            self.users_file.write_text(json.dumps(payload, indent=2))
+    def _save_features(self, path, feature_array):
+        np.save(str(path), feature_array.astype(np.float32))
 
     def _save_image(self, path, image_array):
         if cv2 is not None:
