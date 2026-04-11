@@ -52,13 +52,17 @@ class CameraService:
         diopters > 0  → manual focus (AfMode 0, LensPosition = diopters).
                         Useful range: 5 (20 cm) … 20 (5 cm).
         Only has effect on the picamera2 backend — ignored on others.
+
+        NOTE: self._camera is assigned before the warmup sleep, so it is
+        available even while self._backend is still "unavailable".  Checking
+        _camera is not None is therefore the correct guard here — NOT _backend.
         """
         diopters = max(0.0, min(20.0, float(diopters)))
-        if self._backend != "picamera2" or self._camera is None:
+        if self._camera is None:
             return
         try:
             if diopters == 0.0:
-                self._camera.set_controls({"AfMode": 2})  # back to continuous
+                self._camera.set_controls({"AfMode": 2})
             else:
                 self._camera.set_controls({
                     "AfMode": 0,
@@ -74,19 +78,67 @@ class CameraService:
         return cv2.convertScaleAbs(frame, alpha=1.0, beta=beta)
 
     def get_jpeg_frame(self):
-        """Return a single JPEG-encoded frame (brightness applied) as bytes."""
+        """Capture one frame, crop to the finger region, return JPEG bytes."""
         frame = self.capture_frame()
+        frame = self._crop_to_finger(frame)
         if cv2 is not None:
-            ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
             if ok:
                 return buf.tobytes()
         if Image is not None:
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) if cv2 is not None else frame
             img = Image.fromarray(rgb)
             buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=70)
+            img.save(buf, format="JPEG", quality=75)
             return buf.getvalue()
         raise RuntimeError("Neither cv2 nor Pillow is available for JPEG encoding.")
+
+    def _crop_to_finger(self, frame):
+        """Crop the frame to the finger region for the live preview.
+
+        Uses the same red-channel + Otsu + contour approach as the vein
+        pipeline's ROI extractor, but without resizing — the crop is returned
+        at its natural resolution so the live feed shows just the finger.
+        Falls back to the full frame if no region can be detected.
+        """
+        if cv2 is None or frame is None or frame.size == 0:
+            return frame
+
+        # NIR signal lives in the red channel (BGR index 2)
+        gray = frame[:, :, 2] if frame.ndim == 3 else frame
+        blurred = cv2.GaussianBlur(gray, (15, 15), 0)
+        _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        # Invert if the finger is darker than the background
+        if np.count_nonzero(thresh) < thresh.size * 0.15:
+            thresh = cv2.bitwise_not(thresh)
+
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            return frame
+
+        h_img, w_img = frame.shape[:2]
+        cx_img, cy_img = w_img / 2.0, h_img / 2.0
+
+        def contour_score(c):
+            x, y, w, h = cv2.boundingRect(c)
+            area = float(w * h)
+            dist = ((x + w / 2.0 - cx_img) ** 2 + (y + h / 2.0 - cy_img) ** 2) ** 0.5
+            return area - dist * 3.0
+
+        best = max(contours, key=contour_score)
+        x, y, w, h = cv2.boundingRect(best)
+
+        # Reject tiny detections (noise)
+        if w < w_img * 0.08 or h < h_img * 0.08:
+            return frame
+
+        pad = 30
+        x0 = max(x - pad, 0)
+        y0 = max(y - pad, 0)
+        x1 = min(x + w + pad, w_img)
+        y1 = min(y + h + pad, h_img)
+        return frame[y0:y1, x0:x1]
 
     def capture_frame(self):
         with self._lock:
