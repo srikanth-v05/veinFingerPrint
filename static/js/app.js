@@ -42,6 +42,34 @@ async function requestJson(url, options = {}) {
   return payload;
 }
 
+function focusLabel(val) {
+  // 0 = Auto; otherwise show approximate distance in cm
+  if (val === 0) return "Auto";
+  return "~" + Math.round(100 / val) + " cm";
+}
+
+function makeFocusHandler(sliderId, displayId) {
+  const slider = document.getElementById(sliderId);
+  const display = document.getElementById(displayId);
+  if (!slider || !display) return;
+
+  let focusTimer = null;
+  slider.addEventListener("input", () => {
+    const val = parseFloat(slider.value);
+    display.textContent = focusLabel(val);
+    clearTimeout(focusTimer);
+    focusTimer = setTimeout(async () => {
+      try {
+        await requestJson("/api/camera/focus", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ focus: val }),
+        });
+      } catch (_) {}
+    }, 150);
+  });
+}
+
 function refreshPreviewImages() {
   document.querySelectorAll("img[data-preview]").forEach((image) => {
     const name = image.dataset.preview;
@@ -157,6 +185,8 @@ function initAttendancePage() {
     }, 150);
   });
 
+  makeFocusHandler("focus-slider", "focus-value-display");
+
   button.addEventListener("click", () => {
     openCaptureModal();
   });
@@ -247,6 +277,8 @@ function initAdminPage() {
       }, 150);
     });
   }
+
+  makeFocusHandler("enroll-focus-slider", "enroll-focus-display");
 
   if (closeEnrollBtn) {
     closeEnrollBtn.addEventListener("click", closeEnrollModal);

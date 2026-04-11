@@ -45,6 +45,28 @@ class CameraService:
         """Set brightness offset in the range -100 (darker) to +100 (brighter)."""
         self._brightness = max(-100, min(100, int(value)))
 
+    def set_focus(self, diopters):
+        """Adjust lens focus live.
+
+        diopters = 0  → continuous AF (AfMode 2, camera tracks automatically).
+        diopters > 0  → manual focus (AfMode 0, LensPosition = diopters).
+                        Useful range: 5 (20 cm) … 20 (5 cm).
+        Only has effect on the picamera2 backend — ignored on others.
+        """
+        diopters = max(0.0, min(20.0, float(diopters)))
+        if self._backend != "picamera2" or self._camera is None:
+            return
+        try:
+            if diopters == 0.0:
+                self._camera.set_controls({"AfMode": 2})  # back to continuous
+            else:
+                self._camera.set_controls({
+                    "AfMode": 0,
+                    "LensPosition": diopters,
+                })
+        except Exception:
+            pass
+
     def _apply_brightness(self, frame):
         if cv2 is None or self._brightness == 0:
             return frame
@@ -97,33 +119,43 @@ class CameraService:
             )
 
     def _apply_picam3_nir_controls(self):
-        """Lock AF, AE, and AWB for reproducible NIR finger-vein frames.
+        """Apply Pi Cam 3 NoIR controls for reproducible NIR finger-vein frames.
 
-        Called once after picamera2 starts.  Controls that are not supported
-        by the attached sensor are silently ignored so the method is safe to
-        call on any Picamera2 backend.
+        Focus strategy
+        ──────────────
+        AfMode 2 (Continuous, default): camera continuously focuses on whatever
+        is in the slot.  Works without knowing the exact finger distance and
+        is robust to small placement variations.
+
+        AfMode 0 (Manual): user supplies VEIN_PICAM_LENS_POSITION in diopters
+        (1/distance_m).  Only use this if continuous AF causes visible hunting.
+
+        Exposure / gain are always set to fixed values so every frame has
+        identical illumination — essential for reproducible vein templates.
         """
+        af_mode = self.config["PICAM_AF_MODE"]
+
         controls = {
-            # Manual focus — stops the IMX708 AF motor from repositioning
-            # between enrollment and later recognition captures.
-            "AfMode": self.config["PICAM_AF_MODE"],
-            "LensPosition": self.config["PICAM_LENS_POSITION"],
-            # Manual exposure — critical for reproducible NIR intensity.
-            # Auto-exposure would brighten/darken based on ambient light,
-            # making vein templates inconsistent across sessions.
+            "AfMode": af_mode,
+            # Manual exposure — fixed so enrollment and recognition frames have
+            # the same pixel intensity.  AE would drift with ambient light.
             "AeEnable": False,
             "ExposureTime": self.config["PICAM_EXPOSURE_US"],
-            # Higher analogue gain increases NIR sensitivity on the NoIR sensor.
+            # Higher gain for NIR sensitivity on the NoIR sensor.
             "AnalogueGain": self.config["PICAM_ANALOGUE_GAIN"],
-            # AWB is meaningless for NIR — disable to prevent colour-channel
-            # shifts that would alter the grayscale conversion result.
+            # AWB is irrelevant for NIR but can shift channel gains — disable.
             "AwbEnable": False,
             "ColourGains": (1.0, 1.0),
         }
-        try:
-            self._camera.set_controls(controls)
-        except Exception:
-            pass  # Non-fatal: older firmware or non-Pi sensor may not support all keys
+
+        # LensPosition only applies in manual mode (AfMode=0).
+        # Sending it in continuous/auto mode has no effect and some firmware
+        # versions reject the control outright, causing the whole set_controls
+        # call to fail silently and leaving the camera at infinity focus.
+        if af_mode == 0:
+            controls["LensPosition"] = self.config["PICAM_LENS_POSITION"]
+
+        self._camera.set_controls(controls)
 
     def _initialize(self):
         if self._initialized:

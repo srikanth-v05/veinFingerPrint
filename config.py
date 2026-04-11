@@ -30,12 +30,17 @@ class Config:
     RPICAM_GAIN = float(os.getenv("VEIN_RPICAM_GAIN", "1"))
 
     # Pi Camera Module 3 NoIR controls for NIR finger-vein imaging.
-    # AfMode 0 = manual focus (critical — prevents AF hunting between frames).
-    # LensPosition is in diopters: 1 / distance_metres.
-    #   8 cm finger slot  → 12.5   |  10 cm → 10.0  |  12 cm → 8.3
-    # ExposureTime in microseconds — tune so the finger is clearly lit but not blown out.
-    # AnalogueGain boosted for NIR sensitivity (no visible-light penalty on NoIR sensor).
-    PICAM_AF_MODE = int(os.getenv("VEIN_PICAM_AF_MODE", "0"))          # 0=manual
+    #
+    # AfMode: 2 = Continuous AF (default — camera locks on the finger in the
+    #   slot automatically, no distance calibration needed).
+    #   Set VEIN_PICAM_AF_MODE=0 to use manual focus instead, then also set
+    #   VEIN_PICAM_LENS_POSITION to the correct diopter value for your slot:
+    #     6 cm → 16.7  |  8 cm → 12.5  |  10 cm → 10.0  |  12 cm → 8.3
+    #
+    # ExposureTime in microseconds — tune so the finger is clearly lit but not
+    #   blown out in the live feed.  Start at 10 000 and increase if too dark.
+    # AnalogueGain boosted for NIR sensitivity.
+    PICAM_AF_MODE = int(os.getenv("VEIN_PICAM_AF_MODE", "2"))           # 2=continuous
     PICAM_LENS_POSITION = float(os.getenv("VEIN_PICAM_LENS_POSITION", "10.0"))
     PICAM_EXPOSURE_US = int(os.getenv("VEIN_PICAM_EXPOSURE_US", "10000"))  # 10 ms
     PICAM_ANALOGUE_GAIN = float(os.getenv("VEIN_PICAM_ANALOGUE_GAIN", "6.0"))

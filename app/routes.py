@@ -189,6 +189,18 @@ def register_routes(app):
             headers={"Cache-Control": "no-cache, no-store"},
         )
 
+    @app.post("/api/camera/focus")
+    def set_camera_focus():
+        if not _validate_csrf():
+            return jsonify({"ok": False, "message": "Invalid request."}), 403
+        payload = request.get_json(silent=True) or {}
+        try:
+            value = float(payload.get("focus", 0))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "message": "Invalid focus value."}), 400
+        camera_service().set_focus(value)
+        return jsonify({"ok": True})
+
     @app.post("/api/camera/brightness")
     def set_camera_brightness():
         if not _validate_csrf():
