@@ -90,40 +90,58 @@ class AttendanceService:
             query_features = self.vein.extract_features(query_template)
             self.storage.save_last_capture(frame, query_template)
 
-            best_user = None
-            best_score = -1.0
-
+            # Collect (score, user) for every enrolled user
+            ranked = []
             for user in users:
-                user_scores = []
+                sample_scores = []
                 for sample in user.get("samples", []):
                     if "features_path" in sample:
                         ref_features = self.storage.load_features(sample["features_path"])
                         if ref_features is not None:
-                            score = self.vein.compare_features(query_features, ref_features)
-                            user_scores.append(score)
+                            sample_scores.append(
+                                self.vein.compare_features(query_features, ref_features)
+                            )
                             continue
                     template = self.storage.load_template(sample["template_path"])
                     if template is not None:
-                        score = self.vein.compare_templates(query_template, template)
-                        user_scores.append(score)
+                        sample_scores.append(
+                            self.vein.compare_templates(query_template, template)
+                        )
 
-                if not user_scores:
+                if not sample_scores:
                     continue
 
-                top_scores = sorted(user_scores, reverse=True)[
-                    : self.config["MATCH_TOP_K"]
-                ]
-                score = sum(top_scores) / len(top_scores)
-                if score > best_score:
-                    best_score = score
-                    best_user = user
+                top = sorted(sample_scores, reverse=True)[: self.config["MATCH_TOP_K"]]
+                ranked.append((sum(top) / len(top), user))
 
-            if best_user is None or best_score < self.config["MATCH_THRESHOLD"]:
+            if not ranked:
+                return {
+                    "ok": False,
+                    "message": "No usable enrolled templates found.",
+                    "score": 0.0,
+                }
+
+            ranked.sort(key=lambda x: x[0], reverse=True)
+            best_score, best_user = ranked[0]
+
+            # Hard threshold — must clear the minimum confidence bar
+            if best_score < self.config["MATCH_THRESHOLD"]:
                 return {
                     "ok": False,
                     "message": "No matching vein template found. Reposition the finger and try again.",
-                    "score": round(max(best_score, 0.0), 4),
+                    "score": round(best_score, 4),
                 }
+
+            # Margin check — best match must be clearly ahead of the runner-up
+            # to avoid picking the wrong person when scores are neck-and-neck
+            if len(ranked) >= 2:
+                second_score = ranked[1][0]
+                if (best_score - second_score) < self.config["MATCH_MARGIN"]:
+                    return {
+                        "ok": False,
+                        "message": "Scan is ambiguous — vein pattern too close to multiple users. Reposition and try again.",
+                        "score": round(best_score, 4),
+                    }
 
             existing = self.storage.get_today_record(best_user["user_id"])
             if existing:

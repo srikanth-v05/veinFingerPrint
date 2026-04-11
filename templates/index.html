@@ -4,6 +4,34 @@
 {% block page_id %}attendance{% endblock %}
 
 {% block content %}
+
+<!-- Live capture modal -->
+<div id="capture-modal" class="capture-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="capture-modal-title">
+  <div class="capture-dialog">
+    <div class="capture-dialog-header">
+      <div>
+        <p class="eyebrow">Live Preview</p>
+        <h3 id="capture-modal-title">Position finger and capture</h3>
+      </div>
+      <button id="close-modal-btn" class="close-btn" aria-label="Close live preview">✕</button>
+    </div>
+    <div class="live-feed-wrap">
+      <img id="live-feed-img" src="" alt="Live camera feed">
+    </div>
+    <div class="brightness-control">
+      <label for="brightness-slider">
+        <span>Brightness</span>
+        <span id="brightness-value-display">0</span>
+      </label>
+      <input type="range" id="brightness-slider" min="-100" max="100" value="0" step="5">
+    </div>
+    <div id="modal-status" class="flash info">Ready — keep the finger still.</div>
+    <div class="capture-dialog-footer">
+      <button id="modal-capture-btn" class="primary-button">Capture</button>
+    </div>
+  </div>
+</div>
+
 <main class="layout-grid">
   <section class="hero-card">
     <p class="eyebrow">Public Attendance Panel</p>

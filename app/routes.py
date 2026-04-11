@@ -23,6 +23,9 @@ def register_routes(app):
     def attendance_service():
         return current_app.extensions["attendance_service"]
 
+    def camera_service():
+        return current_app.extensions["camera_service"]
+
     def admin_required(view):
         @wraps(view)
         def wrapped(*args, **kwargs):
@@ -151,6 +154,52 @@ def register_routes(app):
 
         result = attendance_service().delete_user(user_id)
         return jsonify(result), 200 if result["ok"] else 404
+
+    @app.get("/api/camera/stream")
+    def camera_stream():
+        # Stream is intentionally public — it backs the live-feed on the
+        # public attendance page.  It only shows NIR finger images.
+        # If stricter access control is needed, place the Pi behind a firewall
+        # and restrict port 5000 to the local network.
+        import time as _time
+        cam = camera_service()
+
+        def generate():
+            while True:
+                if cam.backend == "unavailable":
+                    break  # don't spin on a missing camera
+                try:
+                    frame_bytes = cam.get_jpeg_frame()
+                    yield (
+                        b"--frame\r\n"
+                        b"Content-Type: image/jpeg\r\n\r\n"
+                        + frame_bytes
+                        + b"\r\n"
+                    )
+                    _time.sleep(0.08)  # ~12 fps cap
+                except GeneratorExit:
+                    break
+                except Exception:
+                    _time.sleep(0.15)
+                    continue
+
+        return Response(
+            generate(),
+            mimetype="multipart/x-mixed-replace; boundary=frame",
+            headers={"Cache-Control": "no-cache, no-store"},
+        )
+
+    @app.post("/api/camera/brightness")
+    def set_camera_brightness():
+        if not _validate_csrf():
+            return jsonify({"ok": False, "message": "Invalid request."}), 403
+        payload = request.get_json(silent=True) or {}
+        try:
+            value = int(payload.get("brightness", 0))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "message": "Invalid brightness value."}), 400
+        camera_service().set_brightness(value)
+        return jsonify({"ok": True})
 
     @app.get("/captures/<path:filename>")
     def capture_file(filename):

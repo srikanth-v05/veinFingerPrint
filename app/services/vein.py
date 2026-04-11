@@ -117,8 +117,6 @@ class VeinRecognitionService:
                 correlation = float(
                     np.sum(query_centered * reference_centered) / denominator
                 )
-        difference = 1.0 - float(np.mean(np.abs(query - reference)) / 255.0)
-
         query_binary = query > np.mean(query)
         reference_binary = reference > np.mean(reference)
         intersection = float(np.logical_and(query_binary, reference_binary).sum())
@@ -136,26 +134,29 @@ class VeinRecognitionService:
                 orb_score = len(good) / max(min(len(kp1), len(kp2)), 1)
                 orb_score = min(orb_score, 1.0)
 
+        # NOTE: the old "difference" term (1 - mean_abs_diff/255) was removed because
+        # it measures overall brightness similarity, not vein structure — two fingers
+        # with similar lighting would score high regardless of their vein pattern,
+        # causing false-positive matches.
         if self._orb is not None:
-            score = (correlation * 0.42) + (difference * 0.28) + (overlap * 0.15) + (
-                orb_score * 0.15
-            )
+            score = (correlation * 0.60) + (overlap * 0.25) + (orb_score * 0.15)
         else:
-            score = (correlation * 0.5) + (difference * 0.3) + (overlap * 0.2)
+            score = (correlation * 0.72) + (overlap * 0.28)
         return round(max(0.0, min(score, 1.0)), 4)
 
     def _to_grayscale(self, frame):
         if frame.ndim == 2:
             return frame
         if cv2 is not None:
-            return cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # NoIR camera + NIR backlight: the NIR signal lands almost entirely
+            # in the red channel.  Standard luminance weights (R×0.299 G×0.587
+            # B×0.114) would dilute the vein signal by 70 %.  Extract the red
+            # channel directly for maximum contrast.
+            # OpenCV frame is BGR → channel index 2 is Red.
+            return frame[:, :, 2].copy()
 
-        rgb = frame.astype(np.float32)
-        return np.clip(
-            (rgb[..., 0] * 0.299) + (rgb[..., 1] * 0.587) + (rgb[..., 2] * 0.114),
-            0,
-            255,
-        ).astype(np.uint8)
+        # PIL fallback — frame is RGB, channel 0 is Red
+        return frame[..., 0].copy()
 
     def _extract_finger_roi(self, gray):
         if cv2 is not None:

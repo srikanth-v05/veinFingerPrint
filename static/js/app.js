@@ -95,52 +95,103 @@ function initAttendancePage() {
   const flash = document.getElementById("attendance-status");
   const resultCard = document.getElementById("attendance-result");
 
+  const modal = document.getElementById("capture-modal");
+  const closeModalBtn = document.getElementById("close-modal-btn");
+  const liveFeed = document.getElementById("live-feed-img");
+  const brightnessSlider = document.getElementById("brightness-slider");
+  const brightnessDisplay = document.getElementById("brightness-value-display");
+  const modalCaptureBtn = document.getElementById("modal-capture-btn");
+  const modalStatus = document.getElementById("modal-status");
+
   if (!button) {
     return;
   }
 
-  button.addEventListener("click", async () => {
-    setButtonBusy(button, true, "Capturing vein...", "Mark Attendance");
-    setFlash(
-      flash,
-      "Capturing from the Raspberry Pi camera. Keep the finger still.",
-      "info"
-    );
+  function openCaptureModal() {
+    modal.classList.remove("hidden");
+    liveFeed.src = "/api/camera/stream";
+  }
 
-    try {
-      const payload = await requestJson("/api/attendance/mark", { method: "POST" });
+  function closeCaptureModal() {
+    modal.classList.add("hidden");
+    liveFeed.src = "";
+  }
+
+  function showCaptureResult(payload, isError) {
+    if (isError) {
+      setFlash(flash, payload.message || payload, "error");
+    } else {
       setFlash(flash, payload.message, "success");
-
-      resultCard.innerHTML = "";
-      const label = document.createElement("p");
-      label.className = "result-label";
-      label.textContent = "Last response";
-      const heading = document.createElement("h2");
-      heading.textContent = payload.user?.full_name || "Attendance captured";
-      const detail = document.createElement("p");
+    }
+    resultCard.innerHTML = "";
+    const label = document.createElement("p");
+    label.className = "result-label";
+    label.textContent = "Last response";
+    const heading = document.createElement("h2");
+    heading.textContent = isError ? "Scan failed" : (payload.user?.full_name || "Attendance captured");
+    const detail = document.createElement("p");
+    if (!isError) {
       const scoreText = payload.score != null ? `Score: ${payload.score}` : "";
       const timeText = payload.record?.timestamp ? ` | Time: ${payload.record.timestamp}` : "";
       detail.textContent = scoreText + timeText;
-      resultCard.append(label, heading, detail);
+    } else {
+      detail.textContent = payload.message || payload;
+    }
+    resultCard.append(label, heading, detail);
+  }
 
+  // Debounced brightness update
+  let brightnessTimer = null;
+  brightnessSlider.addEventListener("input", () => {
+    const val = parseInt(brightnessSlider.value, 10);
+    brightnessDisplay.textContent = val > 0 ? `+${val}` : String(val);
+    clearTimeout(brightnessTimer);
+    brightnessTimer = setTimeout(async () => {
+      try {
+        await requestJson("/api/camera/brightness", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ brightness: val }),
+        });
+      } catch (_) {}
+    }, 150);
+  });
+
+  button.addEventListener("click", () => {
+    openCaptureModal();
+  });
+
+  closeModalBtn.addEventListener("click", () => {
+    closeCaptureModal();
+  });
+
+  // Close on backdrop click
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeCaptureModal();
+  });
+
+  // Escape key closes modal
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !modal.classList.contains("hidden")) {
+      closeCaptureModal();
+    }
+  });
+
+  modalCaptureBtn.addEventListener("click", async () => {
+    setButtonBusy(modalCaptureBtn, true, "Capturing...", "Capture");
+    setFlash(modalStatus, "Capturing from camera. Keep the finger still.", "info");
+
+    try {
+      const payload = await requestJson("/api/attendance/mark", { method: "POST" });
+      closeCaptureModal();
+      showCaptureResult(payload, false);
       refreshPreviewImages();
       refreshAttendanceLog();
     } catch (error) {
-      setFlash(flash, error.message, "error");
-
-      resultCard.innerHTML = "";
-      const label = document.createElement("p");
-      label.className = "result-label";
-      label.textContent = "Last response";
-      const heading = document.createElement("h2");
-      heading.textContent = "Scan failed";
-      const detail = document.createElement("p");
-      detail.textContent = error.message;
-      resultCard.append(label, heading, detail);
-
+      setFlash(modalStatus, error.message, "error");
       refreshPreviewImages();
     } finally {
-      setButtonBusy(button, false, "Capturing vein...", "Mark Attendance");
+      setButtonBusy(modalCaptureBtn, false, "Capturing...", "Capture");
     }
   });
 
@@ -152,17 +203,84 @@ function initAdminPage() {
   const form = document.getElementById("enroll-form");
   const flash = document.getElementById("admin-status");
 
-  if (form) {
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const submitButton = form.querySelector('button[type="submit"]');
-      const formData = new FormData(form);
-      const payload = Object.fromEntries(formData.entries());
+  const enrollModal = document.getElementById("enroll-modal");
+  const closeEnrollBtn = document.getElementById("close-enroll-modal-btn");
+  const enrollFeed = document.getElementById("enroll-feed-img");
+  const enrollBrightnessSlider = document.getElementById("enroll-brightness-slider");
+  const enrollBrightnessDisplay = document.getElementById("enroll-brightness-display");
+  const startEnrollBtn = document.getElementById("start-enroll-btn");
+  const enrollModalStatus = document.getElementById("enroll-modal-status");
 
-      setButtonBusy(submitButton, true, "Capturing samples...", "Capture and Enroll");
+  // Pending enrollment payload — set when form is submitted, consumed when
+  // the user clicks "Start Enrollment" inside the modal.
+  let pendingPayload = null;
+
+  function openEnrollModal() {
+    enrollModal.classList.remove("hidden");
+    enrollFeed.src = "/api/camera/stream";
+    setFlash(enrollModalStatus, "Position finger in the slot, then click Start Enrollment.", "info");
+    startEnrollBtn.disabled = false;
+    startEnrollBtn.textContent = "Start Enrollment";
+  }
+
+  function closeEnrollModal() {
+    enrollModal.classList.add("hidden");
+    enrollFeed.src = "";
+    pendingPayload = null;
+  }
+
+  // Shared brightness slider (same endpoint as attendance page)
+  let enrollBrightnessTimer = null;
+  if (enrollBrightnessSlider) {
+    enrollBrightnessSlider.addEventListener("input", () => {
+      const val = parseInt(enrollBrightnessSlider.value, 10);
+      enrollBrightnessDisplay.textContent = val > 0 ? `+${val}` : String(val);
+      clearTimeout(enrollBrightnessTimer);
+      enrollBrightnessTimer = setTimeout(async () => {
+        try {
+          await requestJson("/api/camera/brightness", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ brightness: val }),
+          });
+        } catch (_) {}
+      }, 150);
+    });
+  }
+
+  if (closeEnrollBtn) {
+    closeEnrollBtn.addEventListener("click", closeEnrollModal);
+  }
+  if (enrollModal) {
+    enrollModal.addEventListener("click", (e) => {
+      if (e.target === enrollModal) closeEnrollModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !enrollModal.classList.contains("hidden")) {
+        closeEnrollModal();
+      }
+    });
+  }
+
+  if (form) {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      pendingPayload = Object.fromEntries(formData.entries());
+      openEnrollModal();
+    });
+  }
+
+  if (startEnrollBtn) {
+    startEnrollBtn.addEventListener("click", async () => {
+      if (!pendingPayload) return;
+      const payload = pendingPayload;
+      const sampleCount = parseInt(payload.sample_count, 10) || 3;
+
+      setButtonBusy(startEnrollBtn, true, "Capturing...", "Start Enrollment");
       setFlash(
-        flash,
-        "Enrollment started. Hold the finger in the same position until capture completes.",
+        enrollModalStatus,
+        `Capturing ${sampleCount} sample(s). Keep the finger completely still.`,
         "info"
       );
 
@@ -172,13 +290,13 @@ function initAdminPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        closeEnrollModal();
         setFlash(flash, response.message, "success");
         refreshPreviewImages();
         window.setTimeout(() => window.location.reload(), 900);
       } catch (error) {
-        setFlash(flash, error.message, "error");
-      } finally {
-        setButtonBusy(submitButton, false, "Capturing samples...", "Capture and Enroll");
+        setFlash(enrollModalStatus, error.message, "error");
+        setButtonBusy(startEnrollBtn, false, "Capturing...", "Start Enrollment");
       }
     });
   }

@@ -4,6 +4,34 @@
 {% block page_id %}admin{% endblock %}
 
 {% block content %}
+
+<!-- Enrollment live-feed modal -->
+<div id="enroll-modal" class="capture-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="enroll-modal-title">
+  <div class="capture-dialog">
+    <div class="capture-dialog-header">
+      <div>
+        <p class="eyebrow">Enrollment Preview</p>
+        <h3 id="enroll-modal-title">Position finger, then start</h3>
+      </div>
+      <button id="close-enroll-modal-btn" class="close-btn" aria-label="Close preview">✕</button>
+    </div>
+    <div class="live-feed-wrap">
+      <img id="enroll-feed-img" src="" alt="Live camera feed for enrollment">
+    </div>
+    <div class="brightness-control">
+      <label for="enroll-brightness-slider">
+        <span>Brightness</span>
+        <span id="enroll-brightness-display">0</span>
+      </label>
+      <input type="range" id="enroll-brightness-slider" min="-100" max="100" value="0" step="5">
+    </div>
+    <div id="enroll-modal-status" class="flash info">Position finger in the slot, then click Start Enrollment.</div>
+    <div class="capture-dialog-footer">
+      <button id="start-enroll-btn" class="primary-button">Start Enrollment</button>
+    </div>
+  </div>
+</div>
+
 <main class="layout-grid admin-grid">
   <section class="panel">
     <div class="panel-header">
@@ -25,7 +53,7 @@
         <span>Sample Count</span>
         <input type="number" name="sample_count" min="1" max="6" value="{{ default_samples }}">
       </label>
-      <button type="submit" class="primary-button">Capture and Enroll</button>
+      <button type="submit" class="primary-button">Preview and Enroll</button>
     </form>
     <div id="admin-status" class="flash info">
       Keep the finger still during enrollment. Multiple captures will be taken automatically.
