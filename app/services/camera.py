@@ -62,7 +62,11 @@ class CameraService:
             return
         try:
             if diopters == 0.0:
+                # AfMode must be applied before the trigger (separate calls).
+                # Some firmware versions ignore AfTrigger when bundled with
+                # AfMode, leaving the lens frozen at the last manual position.
                 self._camera.set_controls({"AfMode": 2})
+                self._camera.set_controls({"AfTrigger": 0})
             else:
                 self._camera.set_controls({
                     "AfMode": 0,
@@ -208,6 +212,11 @@ class CameraService:
             controls["LensPosition"] = self.config["PICAM_LENS_POSITION"]
 
         self._camera.set_controls(controls)
+
+        # AfTrigger must be sent in a separate call after AfMode is applied.
+        # Some firmware versions ignore it when bundled with other controls.
+        if af_mode != 0:
+            self._camera.set_controls({"AfTrigger": 0})
 
     def _initialize(self):
         if self._initialized:
