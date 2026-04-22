@@ -283,7 +283,6 @@ class CameraService:
         command = [
             str(self._rpicam_path),
             "--nopreview",
-            "--immediate",
             "--shutter",
             str(self.config["RPICAM_SHUTTER"]),
             "--gain",
