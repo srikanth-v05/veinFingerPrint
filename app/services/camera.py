@@ -82,9 +82,11 @@ class CameraService:
         return cv2.convertScaleAbs(frame, alpha=1.0, beta=beta)
 
     def get_jpeg_frame(self):
-        """Capture one frame, crop to the finger region, return JPEG bytes."""
+        """Capture one frame, draw finger guide, return JPEG bytes."""
         frame = self.capture_frame()
-        frame = self._crop_to_finger(frame)
+        if frame is not None:
+            frame = frame.copy()
+            frame = self._draw_placement_guide(frame)
         if cv2 is not None:
             ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
             if ok:
@@ -97,52 +99,61 @@ class CameraService:
             return buf.getvalue()
         raise RuntimeError("Neither cv2 nor Pillow is available for JPEG encoding.")
 
-    def _crop_to_finger(self, frame):
-        """Crop the frame to the finger region for the live preview.
-
-        Uses the same red-channel + Otsu + contour approach as the vein
-        pipeline's ROI extractor, but without resizing — the crop is returned
-        at its natural resolution so the live feed shows just the finger.
-        Falls back to the full frame if no region can be detected.
-        """
+    def _draw_placement_guide(self, frame):
+        """Draw a static placement guide and color it green when a finger is detected."""
         if cv2 is None or frame is None or frame.size == 0:
             return frame
 
-        # NIR signal lives in the red channel (BGR index 2)
-        gray = frame[:, :, 2] if frame.ndim == 3 else frame
-        blurred = cv2.GaussianBlur(gray, (15, 15), 0)
-        _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        try:
+            # Explicitly ensure the frame is a writable contiguous uint8 array for OpenCV
+            frame = np.ascontiguousarray(frame, dtype=np.uint8)
+            h_img, w_img = frame.shape[:2]
 
-        # Invert if the finger is darker than the background
-        if np.count_nonzero(thresh) < thresh.size * 0.15:
-            thresh = cv2.bitwise_not(thresh)
+            # Guide layout size (50% width, 60% height, centered)
+            guide_w = int(w_img * 0.5)
+            guide_h = int(h_img * 0.6)
+            gx0 = int((w_img - guide_w) / 2)
+            gy0 = int((h_img - guide_h) / 2)
+            gx1 = gx0 + guide_w
+            gy1 = gy0 + guide_h
 
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not contours:
-            return frame
+            # Default color: RED (BGR)
+            color = (0, 0, 255)
+            thickness = 8
 
-        h_img, w_img = frame.shape[:2]
-        cx_img, cy_img = w_img / 2.0, h_img / 2.0
+            # Detect finger
+            gray = frame[:, :, 2] if frame.ndim == 3 else frame
+            blurred = cv2.GaussianBlur(gray, (15, 15), 0)
+            _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-        def contour_score(c):
-            x, y, w, h = cv2.boundingRect(c)
-            area = float(w * h)
-            dist = ((x + w / 2.0 - cx_img) ** 2 + (y + h / 2.0 - cy_img) ** 2) ** 0.5
-            return area - dist * 3.0
+            if np.count_nonzero(thresh) < thresh.size * 0.15:
+                thresh = cv2.bitwise_not(thresh)
 
-        best = max(contours, key=contour_score)
-        x, y, w, h = cv2.boundingRect(best)
+            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if contours:
+                cx_img, cy_img = w_img / 2.0, h_img / 2.0
 
-        # Reject tiny detections (noise)
-        if w < w_img * 0.08 or h < h_img * 0.08:
-            return frame
+                def contour_score(c):
+                    x, y, w, h = cv2.boundingRect(c)
+                    return float(w * h) - (((x + w/2.0 - cx_img)**2 + (y + h/2.0 - cy_img)**2)**0.5) * 3.0
 
-        pad = 30
-        x0 = max(x - pad, 0)
-        y0 = max(y - pad, 0)
-        x1 = min(x + w + pad, w_img)
-        y1 = min(y + h + pad, h_img)
-        return frame[y0:y1, x0:x1]
+                best = max(contours, key=contour_score)
+                x, y, w, h = cv2.boundingRect(best)
+
+                if w > w_img * 0.15 and h > h_img * 0.2:
+                    color = (0, 255, 0)
+                    thickness = 10
+
+            # Draw the thick rectangle
+            cv2.rectangle(frame, (gx0, gy0), (gx1, gy1), color, thickness)
+        except Exception as e:
+            print(f"Error drawing camera layout: {e}")
+            # Fallback drawing in case of shape/contour issues
+            if cv2 is not None:
+                h, w = frame.shape[:2]
+                cv2.rectangle(frame, (50, 50), (w-50, h-50), (255, 0, 0), 10)
+        
+        return frame
 
     def capture_frame(self):
         with self._lock:
@@ -283,7 +294,6 @@ class CameraService:
         command = [
             str(self._rpicam_path),
             "--nopreview",
-            "--immediate",
             "--shutter",
             str(self.config["RPICAM_SHUTTER"]),
             "--gain",
